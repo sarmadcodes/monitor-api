@@ -6,9 +6,11 @@ import { config } from "./config";
 import { authRoutes } from "./routes/auth";
 import { serverRoutes } from "./routes/servers";
 import { serviceRoutes } from "./routes/services";
+import { incidentRoutes } from "./routes/incidents";
 import { handleAgentConnection } from "./ws/agentSocket";
 import { handleDashboardConnection } from "./ws/dashboardSocket";
 import { startHealthChecker } from "./healthChecker";
+import { startSslChecker } from "./sslChecker";
 import { verifySession, SESSION_COOKIE } from "./auth";
 
 async function main() {
@@ -26,6 +28,7 @@ async function main() {
   await app.register(authRoutes);
   await app.register(serverRoutes);
   await app.register(serviceRoutes);
+  await app.register(incidentRoutes);
 
   // Agents connect outbound here and authenticate via a "hello" message
   // carrying their per-server token (see packages/shared AgentToApiMessage).
@@ -50,6 +53,7 @@ async function main() {
   });
 
   startHealthChecker();
+  startSslChecker();
 
   await app.listen({ port: config.port, host: "0.0.0.0" });
 }

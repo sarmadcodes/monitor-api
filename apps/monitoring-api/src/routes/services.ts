@@ -12,7 +12,7 @@ const actionSchema = z.object({
 });
 
 async function handleAction(
-  action: "restart" | "reload" | "stop",
+  action: "restart" | "reload" | "stop" | "start",
   serverId: string,
   processName: string
 ) {
@@ -28,7 +28,7 @@ async function handleAction(
 export async function serviceRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireAuth);
 
-  for (const action of ["restart", "reload", "stop"] as const) {
+  for (const action of ["restart", "reload", "stop", "start"] as const) {
     app.post(`/api/services/${action}`, async (req, reply) => {
       const parsed = actionSchema.safeParse(req.body);
       if (!parsed.success) return reply.code(400).send({ error: "Invalid request" });

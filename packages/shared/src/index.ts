@@ -9,7 +9,7 @@ export type ProcessStatus =
 
 export type HealthStatus = "healthy" | "unhealthy" | "unknown";
 
-export type ServerConnectionStatus = "online" | "offline";
+export type ServerConnectionStatus = "online" | "offline" | "degraded";
 
 export interface SystemMetrics {
   hostname: string;
@@ -30,6 +30,7 @@ export interface SystemMetrics {
   uptimeSeconds: number;
   nodeVersion: string;
   pm2Version: string | null;
+  temperatureC: number | null;
 }
 
 export interface PM2ProcessInfo {
@@ -51,6 +52,7 @@ export interface PM2ProcessInfo {
 }
 
 export interface LogLine {
+  source: "pm2" | "nginx" | "agent";
   processName: string;
   stream: "stdout" | "stderr";
   timestamp: number;
@@ -69,14 +71,57 @@ export interface HealthCheckResult {
   checkedAt: number;
 }
 
+export interface NginxStatus {
+  installed: boolean;
+  active: boolean;
+  version: string | null;
+}
+
+export interface SslCertInfo {
+  domain: string;
+  valid: boolean;
+  issuer: string | null;
+  expiresAt: number | null;
+  daysRemaining: number | null;
+  error: string | null;
+  checkedAt: number;
+}
+
+export type IncidentSeverity = "critical" | "warning" | "info";
+export type IncidentStatus = "open" | "acknowledged" | "resolved";
+
+export interface Incident {
+  id: string;
+  serverId: string;
+  serverName: string;
+  processName: string | null;
+  kind:
+    | "process_crash"
+    | "restart_spike"
+    | "server_offline"
+    | "server_online"
+    | "cpu_threshold"
+    | "memory_threshold"
+    | "disk_threshold"
+    | "health_check_failed"
+    | "ssl_expiring"
+    | "ssl_expired";
+  severity: IncidentSeverity;
+  message: string;
+  detectedAt: number;
+  resolvedAt: number | null;
+  status: IncidentStatus;
+}
+
 // ---- Agent -> API messages ----
 
 export type AgentToApiMessage =
   | { type: "hello"; token: string; agentVersion: string; hostname: string }
   | { type: "metrics"; data: SystemMetrics }
   | { type: "processes"; data: PM2ProcessInfo[] }
-  | { type: "log"; data: LogLine }
+  | { type: "log:batch"; data: LogLine[] }
   | { type: "health"; data: HealthCheckResult }
+  | { type: "nginx"; data: NginxStatus }
   | { type: "action:result"; requestId: string; ok: boolean; error?: string };
 
 // ---- API -> Agent messages ----
@@ -85,7 +130,8 @@ export type ApiToAgentMessage =
   | { type: "welcome"; serverId: string }
   | { type: "action:restart"; requestId: string; processName: string }
   | { type: "action:reload"; requestId: string; processName: string }
-  | { type: "action:stop"; requestId: string; processName: string };
+  | { type: "action:stop"; requestId: string; processName: string }
+  | { type: "action:start"; requestId: string; processName: string };
 
 // ---- API -> Dashboard messages (broadcast over separate WS) ----
 
@@ -98,17 +144,23 @@ export interface ServerSnapshot {
   metrics: SystemMetrics | null;
   processes: PM2ProcessInfo[];
   health: Record<string, HealthCheckResult>;
+  nginx: NginxStatus | null;
+  ssl: Record<string, SslCertInfo>;
 }
 
 export type ApiToDashboardMessage =
-  | { type: "snapshot"; servers: ServerSnapshot[] }
+  | { type: "snapshot"; servers: ServerSnapshot[]; incidents: Incident[] }
   | { type: "server:update"; server: ServerSnapshot }
   | { type: "server:offline"; serverId: string; lastSeen: number }
   | { type: "server:online"; serverId: string }
-  | { type: "log:new"; serverId: string; data: LogLine }
-  | { type: "health:update"; serverId: string; data: HealthCheckResult };
+  | { type: "log:batch"; serverId: string; serverName: string; data: LogLine[] }
+  | { type: "health:update"; serverId: string; data: HealthCheckResult }
+  | { type: "ssl:update"; serverId: string; data: SslCertInfo }
+  | { type: "incident:created"; incident: Incident }
+  | { type: "incident:updated"; incident: Incident };
 
 export type DashboardToApiMessage =
   | { type: "action:restart"; serverId: string; processName: string }
   | { type: "action:reload"; serverId: string; processName: string }
-  | { type: "action:stop"; serverId: string; processName: string };
+  | { type: "action:stop"; serverId: string; processName: string }
+  | { type: "action:start"; serverId: string; processName: string };

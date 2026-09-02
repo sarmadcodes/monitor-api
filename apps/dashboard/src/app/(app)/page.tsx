@@ -1,19 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { AppShell } from "@/components/AppShell";
 import { ServerCard } from "@/components/ServerCard";
 import { ServiceTable } from "@/components/ServiceTable";
+import { IncidentBanner } from "@/components/IncidentBanner";
 import { useDashboardStore } from "@/lib/store";
 
 export default function OverviewPage() {
   const servers = useDashboardStore((s) => Object.values(s.servers));
 
   return (
-    <AppShell>
+    <>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-lg font-semibold text-white">System Health</h1>
       </div>
+
+      <IncidentBanner />
 
       {servers.length === 0 ? (
         <div className="rounded-lg border border-dashed border-bg-border p-10 text-center">
@@ -37,6 +39,6 @@ export default function OverviewPage() {
           <ServiceTable servers={servers} />
         </>
       )}
-    </AppShell>
+    </>
   );
 }

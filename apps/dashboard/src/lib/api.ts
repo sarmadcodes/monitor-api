@@ -71,4 +71,20 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ serverId, processName }),
     }),
+  startService: (serverId: string, processName: string) =>
+    request<{ ok: boolean; error?: string }>("/api/services/start", {
+      method: "POST",
+      body: JSON.stringify({ serverId, processName }),
+    }),
+
+  getGlobalLogs: () =>
+    request<Array<import("@infra-monitor/shared").LogLine & { serverId: string; serverName: string }>>(
+      "/api/logs"
+    ),
+
+  listIncidents: () => request<import("@infra-monitor/shared").Incident[]>("/api/incidents"),
+  acknowledgeIncident: (id: string) =>
+    request<import("@infra-monitor/shared").Incident>(`/api/incidents/${id}/acknowledge`, { method: "POST" }),
+  resolveIncident: (id: string) =>
+    request<import("@infra-monitor/shared").Incident>(`/api/incidents/${id}/resolve`, { method: "POST" }),
 };

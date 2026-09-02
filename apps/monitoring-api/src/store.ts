@@ -4,9 +4,11 @@ import { nanoid } from "nanoid";
 import type {
   HealthCheckResult,
   LogLine,
+  NginxStatus,
   PM2ProcessInfo,
   ServerConnectionStatus,
   ServerSnapshot,
+  SslCertInfo,
   SystemMetrics,
 } from "@infra-monitor/shared";
 import { config } from "./config";
@@ -48,10 +50,27 @@ export interface LiveServerState {
   metrics: SystemMetrics | null;
   processes: PM2ProcessInfo[];
   health: Record<string, HealthCheckResult>;
+  nginx: NginxStatus | null;
+  ssl: Record<string, SslCertInfo>;
   recentLogs: LogLine[]; // ring buffer, most recent last
+  restartCounts: Record<string, number>; // last-seen restart count, for spike detection
 }
 
-const MAX_RECENT_LOGS = 500;
+const MAX_RECENT_LOGS = 2000;
+
+function freshLiveState(): LiveServerState {
+  return {
+    connectionStatus: "offline",
+    lastSeen: null,
+    metrics: null,
+    processes: [],
+    health: {},
+    nginx: null,
+    ssl: {},
+    recentLogs: [],
+    restartCounts: {},
+  };
+}
 
 class Store {
   private servers = new Map<string, RegisteredServer>();
@@ -62,14 +81,7 @@ class Store {
     for (const s of persisted.servers) {
       s.healthUrls = s.healthUrls ?? {};
       this.servers.set(s.id, s);
-      this.live.set(s.id, {
-        connectionStatus: "offline",
-        lastSeen: null,
-        metrics: null,
-        processes: [],
-        health: {},
-        recentLogs: [],
-      });
+      this.live.set(s.id, freshLiveState());
     }
   }
 
@@ -88,14 +100,7 @@ class Store {
       healthUrls: {},
     };
     this.servers.set(server.id, server);
-    this.live.set(server.id, {
-      connectionStatus: "offline",
-      lastSeen: null,
-      metrics: null,
-      processes: [],
-      health: {},
-      recentLogs: [],
-    });
+    this.live.set(server.id, freshLiveState());
     this.persist();
     return server;
   }
@@ -173,10 +178,20 @@ class Store {
     }
   }
 
-  pushLog(id: string, log: LogLine) {
+  updateNginx(id: string, nginx: NginxStatus) {
     const live = this.live.get(id);
-    if (!live) return;
-    live.recentLogs.push(log);
+    if (live) live.nginx = nginx;
+  }
+
+  updateSsl(id: string, result: SslCertInfo) {
+    const live = this.live.get(id);
+    if (live) live.ssl[result.domain] = result;
+  }
+
+  pushLogs(id: string, logs: LogLine[]) {
+    const live = this.live.get(id);
+    if (!live || logs.length === 0) return;
+    live.recentLogs.push(...logs);
     if (live.recentLogs.length > MAX_RECENT_LOGS) {
       live.recentLogs.splice(0, live.recentLogs.length - MAX_RECENT_LOGS);
     }
@@ -202,6 +217,8 @@ class Store {
       metrics: live.metrics,
       processes: live.processes,
       health: live.health,
+      nginx: live.nginx,
+      ssl: live.ssl,
     };
   }
 

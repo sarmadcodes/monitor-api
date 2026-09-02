@@ -83,6 +83,29 @@ async function pm2Version(): Promise<string | null> {
   }
 }
 
+// Best-effort: most VPS/cloud instances (this box included) run virtualized
+// with no exposed thermal zone, so null here is the honest, common case —
+// not a bug. Real hardware with /sys/class/thermal will report a value.
+async function readTemperatureC(): Promise<number | null> {
+  if (process.platform !== "linux") return null;
+  try {
+    const zones = await fs.readdir("/sys/class/thermal");
+    for (const zone of zones) {
+      if (!zone.startsWith("thermal_zone")) continue;
+      try {
+        const raw = await fs.readFile(`/sys/class/thermal/${zone}/temp`, "utf-8");
+        const milliC = Number(raw.trim());
+        if (!Number.isNaN(milliC) && milliC > 0) return milliC / 1000;
+      } catch {
+        continue;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function collectSystemMetrics(): Promise<SystemMetrics> {
   const totalMem = os.totalmem();
   const freeMem = os.freemem();
@@ -108,5 +131,6 @@ export async function collectSystemMetrics(): Promise<SystemMetrics> {
     uptimeSeconds: os.uptime(),
     nodeVersion: process.version,
     pm2Version: await pm2Version(),
+    temperatureC: await readTemperatureC(),
   };
 }

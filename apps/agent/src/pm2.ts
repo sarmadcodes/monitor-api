@@ -73,7 +73,7 @@ export function connectPm2(): Promise<void> {
   });
 }
 
-const ALLOWED_ACTIONS = ["restart", "reload", "stop"] as const;
+const ALLOWED_ACTIONS = ["restart", "reload", "stop", "start"] as const;
 export type Pm2Action = (typeof ALLOWED_ACTIONS)[number];
 
 export async function runPm2Action(action: Pm2Action, processName: string): Promise<void> {
@@ -92,6 +92,7 @@ export async function runPm2Action(action: Pm2Action, processName: string): Prom
     const cb = (err: Error | null) => (err ? reject(err) : resolve());
     if (action === "restart") pm2.restart(processName, cb);
     else if (action === "reload") pm2.reload(processName, cb);
+    else if (action === "start") pm2.start(processName, cb);
     else pm2.stop(processName, cb);
   });
 }

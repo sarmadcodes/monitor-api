@@ -2,9 +2,15 @@
 
 import { useRequireAuth } from "@/lib/useAuth";
 import { useLiveConnection } from "@/lib/useLiveConnection";
-import { TopBar } from "./TopBar";
+import { TopBar } from "@/components/TopBar";
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+// This layout wraps every authenticated page (/, /services, /logs,
+// /incidents, /settings) except /wallboard and /login. Next.js keeps a
+// shared layout mounted across client-side navigation between its child
+// routes, so the auth check and the WebSocket connection below are made
+// ONCE per session, not re-opened on every click — that's the whole reason
+// this lives in a route-group layout instead of being repeated per page.
+export default function AppLayout({ children }: { children: React.ReactNode }) {
   const status = useRequireAuth();
   useLiveConnection(status === "authed");
 

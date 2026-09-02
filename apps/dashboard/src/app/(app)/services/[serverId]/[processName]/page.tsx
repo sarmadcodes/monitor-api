@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import clsx from "clsx";
-import { AppShell } from "@/components/AppShell";
 import { StatusDot } from "@/components/StatusDot";
 import { LogViewer } from "@/components/LogViewer";
 import { MetricTile } from "@/components/MetricTile";
@@ -15,6 +14,7 @@ import { formatBytes, formatDuration } from "@/lib/format";
 import type { LogLine } from "@infra-monitor/shared";
 
 type Tab = "overview" | "logs" | "health" | "configuration";
+type ActionName = "restart" | "reload" | "stop" | "start";
 
 export default function ServiceDetailPage() {
   const params = useParams<{ serverId: string; processName: string }>();
@@ -28,7 +28,7 @@ export default function ServiceDetailPage() {
   const [healthUrl, setHealthUrlInput] = useState("");
   const [actionPending, setActionPending] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [confirmAction, setConfirmAction] = useState<"restart" | "reload" | "stop" | null>(null);
+  const [confirmAction, setConfirmAction] = useState<ActionName | null>(null);
 
   const proc = server?.processes.find((p) => p.name === processName);
   const health = server?.health[processName];
@@ -50,11 +50,16 @@ export default function ServiceDetailPage() {
 
   const errorLogs = allLogs.filter((l) => l.level === "error" || l.level === "fatal");
 
-  async function runAction(action: "restart" | "reload" | "stop") {
+  async function runAction(action: ActionName) {
     setActionPending(action);
     setActionError(null);
     try {
-      const fn = { restart: api.restartService, reload: api.reloadService, stop: api.stopService }[action];
+      const fn = {
+        restart: api.restartService,
+        reload: api.reloadService,
+        stop: api.stopService,
+        start: api.startService,
+      }[action];
       const result = await fn(serverId, processName);
       if (!result.ok) setActionError(result.error ?? "Action failed");
     } catch (err) {
@@ -70,27 +75,22 @@ export default function ServiceDetailPage() {
   }
 
   if (!server) {
-    return (
-      <AppShell>
-        <p className="text-status-muted">Loading server…</p>
-      </AppShell>
-    );
+    return <p className="text-status-muted">Loading server…</p>;
   }
 
   if (!proc) {
     return (
-      <AppShell>
-        <p className="text-status-muted">
-          Process &quot;{processName}&quot; not found on {server.name}. It may have been removed from PM2.
-        </p>
-      </AppShell>
+      <p className="text-status-muted">
+        Process &quot;{processName}&quot; not found on {server.name}. It may have been removed from PM2.
+      </p>
     );
   }
 
   const status = combineHealth(proc, health, server.connectionStatus);
+  const actions: ActionName[] = proc.status === "stopped" ? ["start"] : ["restart", "reload", "stop"];
 
   return (
-    <AppShell>
+    <>
       <div className="mb-1 text-xs">
         <Link href="/services" className="text-status-muted hover:text-white">
           Services
@@ -109,7 +109,7 @@ export default function ServiceDetailPage() {
           <p className="mt-0.5 text-sm text-status-muted">{server.name}</p>
         </div>
         <div className="flex gap-2">
-          {(["restart", "reload", "stop"] as const).map((action) => (
+          {actions.map((action) => (
             <button
               key={action}
               onClick={() => setConfirmAction(action)}
@@ -127,7 +127,9 @@ export default function ServiceDetailPage() {
       {confirmAction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="w-full max-w-sm rounded-lg border border-bg-border bg-bg-panel p-5">
-            <h3 className="mb-2 font-semibold text-white capitalize">{confirmAction} {proc.name}?</h3>
+            <h3 className="mb-2 font-semibold text-white capitalize">
+              {confirmAction} {proc.name}?
+            </h3>
             <p className="mb-4 text-sm text-status-muted">
               This will {confirmAction} the process on {server.name}. Confirm to proceed.
             </p>
@@ -160,7 +162,7 @@ export default function ServiceDetailPage() {
             )}
           >
             {t}
-            {t === "logs" && liveLogs.length > 0 && (
+            {t === "logs" && allLogs.length > 0 && (
               <span className="ml-1.5 rounded-full bg-bg-raised px-1.5 py-0.5 text-[10px]">{allLogs.length}</span>
             )}
             {t === "health" && errorLogs.length > 0 && (
@@ -186,6 +188,7 @@ export default function ServiceDetailPage() {
             <Field label="Mode" value={proc.mode} />
             <Field label="Instances" value={String(proc.instances)} />
             <Field label="Interpreter" value={proc.interpreter ?? "—"} />
+            <Field label="Node version" value={server.metrics?.nodeVersion ?? "—"} />
             <Field label="Script" value={proc.scriptPath ?? "—"} />
             <Field label="Working dir" value={proc.cwd ?? "—"} />
             {health && (
@@ -235,7 +238,9 @@ export default function ServiceDetailPage() {
                 Save
               </button>
             </div>
-            <p className="mt-2 text-xs text-status-muted">Checked every 15 seconds from the monitoring API.</p>
+            <p className="mt-2 text-xs text-status-muted">
+              Checked every 15 seconds. If the URL is HTTPS, its SSL certificate is also tracked automatically.
+            </p>
           </div>
 
           {errorLogs.length > 0 && (
@@ -251,7 +256,7 @@ export default function ServiceDetailPage() {
         <div className="rounded-lg border border-bg-border bg-bg-panel p-5 text-sm">
           <p className="text-status-muted">
             Deployment and Git configuration is not connected yet — this requires the GitHub integration
-            (Phase 3 in the build plan). Currently discovered from PM2:
+            (a later phase). Currently discovered from PM2:
           </p>
           <div className="mt-3 grid grid-cols-2 gap-4">
             <Field label="Script" value={proc.scriptPath ?? "—"} />
@@ -259,7 +264,7 @@ export default function ServiceDetailPage() {
           </div>
         </div>
       )}
-    </AppShell>
+    </>
   );
 }
 

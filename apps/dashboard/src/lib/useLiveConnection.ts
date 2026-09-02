@@ -14,8 +14,17 @@ export function useLiveConnection(enabled: boolean) {
     let cancelled = false;
     let reconnectTimer: ReturnType<typeof setTimeout>;
 
-    const { setWsStatus, setSnapshot, upsertServer, markOffline, markOnline, appendLog, applyHealth } =
-      useDashboardStore.getState();
+    const {
+      setWsStatus,
+      setSnapshot,
+      upsertServer,
+      markOffline,
+      markOnline,
+      appendLogBatch,
+      applyHealth,
+      applySsl,
+      upsertIncident,
+    } = useDashboardStore.getState();
 
     function connect() {
       if (cancelled) return;
@@ -32,7 +41,7 @@ export function useLiveConnection(enabled: boolean) {
         const msg = JSON.parse(event.data) as ApiToDashboardMessage;
         switch (msg.type) {
           case "snapshot":
-            setSnapshot(msg.servers);
+            setSnapshot(msg.servers, msg.incidents);
             break;
           case "server:update":
             upsertServer(msg.server);
@@ -43,11 +52,18 @@ export function useLiveConnection(enabled: boolean) {
           case "server:online":
             markOnline(msg.serverId);
             break;
-          case "log:new":
-            appendLog(msg.serverId, msg.data);
+          case "log:batch":
+            appendLogBatch(msg.serverId, msg.serverName, msg.data);
             break;
           case "health:update":
             applyHealth(msg.serverId, msg.data);
+            break;
+          case "ssl:update":
+            applySsl(msg.serverId, msg.data);
+            break;
+          case "incident:created":
+          case "incident:updated":
+            upsertIncident(msg.incident);
             break;
         }
       };

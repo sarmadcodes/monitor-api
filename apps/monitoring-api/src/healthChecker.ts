@@ -1,6 +1,7 @@
 import type { HealthCheckResult } from "@infra-monitor/shared";
 import { store } from "./store";
 import { broadcastToDashboards } from "./ws/dashboardSocket";
+import { evaluateHealth } from "./incidents";
 
 const CHECK_INTERVAL_MS = 15000;
 const TIMEOUT_MS = 8000;
@@ -42,6 +43,7 @@ async function runOnce() {
       const result = await checkOne(processName, url);
       store.updateHealth(server.id, result);
       broadcastToDashboards({ type: "health:update", serverId: server.id, data: result });
+      evaluateHealth(server.id, result);
     }
   }
 }

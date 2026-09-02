@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { AppShell } from "@/components/AppShell";
 import { useDashboardStore } from "@/lib/store";
 import { api } from "@/lib/api";
 import { StatusDot } from "@/components/StatusDot";
@@ -45,7 +44,7 @@ export default function ServersSettingsPage() {
   }
 
   return (
-    <AppShell>
+    <>
       <h1 className="mb-6 text-lg font-semibold text-white">Servers</h1>
 
       <div className="mb-8 grid gap-4 lg:grid-cols-2">
@@ -151,6 +150,6 @@ export default function ServersSettingsPage() {
           </tbody>
         </table>
       </div>
-    </AppShell>
+    </>
   );
 }

@@ -52,18 +52,31 @@ export function ServerCard({ server }: { server: ServerSnapshot }) {
       )}
 
       {m && (
-        <div className="mt-3 flex justify-between text-[11px] text-status-muted">
-          <span className="mono">↓ {formatBytesPerSec(m.netRxBytesPerSec)}</span>
-          <span className="mono">↑ {formatBytesPerSec(m.netTxBytesPerSec)}</span>
+        <div className="mono mt-3 flex justify-between text-[11px] text-status-muted">
+          <span>↓ {formatBytesPerSec(m.netRxBytesPerSec)}</span>
+          <span>load {m.loadAvg.map((n) => n.toFixed(2)).join(" ")}</span>
+          <span>↑ {formatBytesPerSec(m.netTxBytesPerSec)}</span>
         </div>
       )}
 
-      <div className="mt-4 flex items-center gap-4 border-t border-bg-border pt-3 text-xs">
-        <span className="text-status-healthy">{onlineCount} online</span>
-        <span className="text-status-muted">{stoppedCount} stopped</span>
-        <span className={erroredCount > 0 ? "text-status-critical" : "text-status-muted"}>
-          {erroredCount} critical
-        </span>
+      {m?.temperatureC != null && (
+        <div className="mono mt-1 text-[11px] text-status-muted">{m.temperatureC.toFixed(1)}°C</div>
+      )}
+
+      <div className="mt-4 flex items-center justify-between border-t border-bg-border pt-3 text-xs">
+        <div className="flex items-center gap-4">
+          <span className="text-status-healthy">{onlineCount} online</span>
+          <span className="text-status-muted">{stoppedCount} stopped</span>
+          <span className={erroredCount > 0 ? "text-status-critical" : "text-status-muted"}>
+            {erroredCount} critical
+          </span>
+        </div>
+        {server.nginx?.installed && (
+          <span className="flex items-center gap-1.5 text-status-muted">
+            <StatusDot color={server.nginx.active ? "healthy" : "muted"} />
+            nginx {server.nginx.version ?? ""}
+          </span>
+        )}
       </div>
     </div>
   );

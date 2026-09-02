@@ -10,6 +10,8 @@ import { api } from "@/lib/api";
 const NAV = [
   { href: "/", label: "Overview" },
   { href: "/services", label: "Services" },
+  { href: "/logs", label: "Logs" },
+  { href: "/incidents", label: "Incidents" },
   { href: "/wallboard", label: "Wallboard" },
   { href: "/settings/servers", label: "Settings" },
 ];
@@ -19,6 +21,9 @@ export function TopBar() {
   const router = useRouter();
   const wsStatus = useDashboardStore((s) => s.wsStatus);
   const servers = useDashboardStore((s) => Object.values(s.servers));
+  const openIncidents = useDashboardStore(
+    (s) => Object.values(s.incidents).filter((i) => i.status !== "resolved").length
+  );
   const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
@@ -62,6 +67,11 @@ export function TopBar() {
               )}
             >
               {item.label}
+              {item.href === "/incidents" && openIncidents > 0 && (
+                <span className="ml-1.5 rounded-full bg-status-critical/20 px-1.5 py-0.5 text-[10px] text-status-critical">
+                  {openIncidents}
+                </span>
+              )}
             </Link>
           ))}
         </nav>

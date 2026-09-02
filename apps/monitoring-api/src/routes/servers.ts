@@ -40,6 +40,18 @@ export async function serverRoutes(app: FastifyInstance) {
     return logs;
   });
 
+  app.get("/api/logs", async () => {
+    const merged = store
+      .listServers()
+      .flatMap((server) => {
+        const live = store.getLive(server.id);
+        return (live?.recentLogs ?? []).map((log) => ({ ...log, serverId: server.id, serverName: server.name }));
+      })
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .slice(-1000);
+    return merged;
+  });
+
   app.post("/api/servers", async (req, reply) => {
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "Invalid request" });
