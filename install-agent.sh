@@ -58,8 +58,11 @@ else
 fi
 
 cd "$INSTALL_DIR/apps/agent"
-npm install --omit=dev
+# devDependencies are required here (typescript provides `tsc` for the build
+# step below) — do not use --omit=dev before building.
+npm install
 npm run build
+npm prune --omit=dev
 
 # 5. config
 cat > "$INSTALL_DIR/apps/agent/.env" <<EOF
