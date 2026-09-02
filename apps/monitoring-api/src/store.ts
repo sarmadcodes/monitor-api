@@ -1,0 +1,215 @@
+import fs from "node:fs";
+import path from "node:path";
+import { nanoid } from "nanoid";
+import type {
+  HealthCheckResult,
+  LogLine,
+  PM2ProcessInfo,
+  ServerConnectionStatus,
+  ServerSnapshot,
+  SystemMetrics,
+} from "@infra-monitor/shared";
+import { config } from "./config";
+
+export interface RegisteredServer {
+  id: string;
+  name: string;
+  description: string;
+  environment: string;
+  agentToken: string;
+  createdAt: number;
+  healthUrls: Record<string, string>;
+}
+
+interface PersistedData {
+  servers: RegisteredServer[];
+}
+
+function loadPersisted(): PersistedData {
+  try {
+    const raw = fs.readFileSync(config.dataFile, "utf-8");
+    return JSON.parse(raw);
+  } catch {
+    return { servers: [] };
+  }
+}
+
+function savePersisted(data: PersistedData) {
+  const dir = path.dirname(config.dataFile);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(config.dataFile, JSON.stringify(data, null, 2));
+}
+
+// ---- live (in-memory) state for connected agents ----
+
+export interface LiveServerState {
+  connectionStatus: ServerConnectionStatus;
+  lastSeen: number | null;
+  metrics: SystemMetrics | null;
+  processes: PM2ProcessInfo[];
+  health: Record<string, HealthCheckResult>;
+  recentLogs: LogLine[]; // ring buffer, most recent last
+}
+
+const MAX_RECENT_LOGS = 500;
+
+class Store {
+  private servers = new Map<string, RegisteredServer>();
+  private live = new Map<string, LiveServerState>();
+
+  constructor() {
+    const persisted = loadPersisted();
+    for (const s of persisted.servers) {
+      s.healthUrls = s.healthUrls ?? {};
+      this.servers.set(s.id, s);
+      this.live.set(s.id, {
+        connectionStatus: "offline",
+        lastSeen: null,
+        metrics: null,
+        processes: [],
+        health: {},
+        recentLogs: [],
+      });
+    }
+  }
+
+  private persist() {
+    savePersisted({ servers: Array.from(this.servers.values()) });
+  }
+
+  registerServer(name: string, description: string, environment: string): RegisteredServer {
+    const server: RegisteredServer = {
+      id: nanoid(12),
+      name,
+      description,
+      environment,
+      agentToken: nanoid(32),
+      createdAt: Date.now(),
+      healthUrls: {},
+    };
+    this.servers.set(server.id, server);
+    this.live.set(server.id, {
+      connectionStatus: "offline",
+      lastSeen: null,
+      metrics: null,
+      processes: [],
+      health: {},
+      recentLogs: [],
+    });
+    this.persist();
+    return server;
+  }
+
+  removeServer(id: string) {
+    this.servers.delete(id);
+    this.live.delete(id);
+    this.persist();
+  }
+
+  rotateToken(id: string): RegisteredServer | undefined {
+    const server = this.servers.get(id);
+    if (!server) return undefined;
+    server.agentToken = nanoid(32);
+    this.persist();
+    return server;
+  }
+
+  setHealthUrl(id: string, processName: string, url: string | null) {
+    const server = this.servers.get(id);
+    if (!server) return;
+    if (url) {
+      server.healthUrls[processName] = url;
+    } else {
+      delete server.healthUrls[processName];
+    }
+    this.persist();
+  }
+
+  listServers(): RegisteredServer[] {
+    return Array.from(this.servers.values());
+  }
+
+  getServer(id: string): RegisteredServer | undefined {
+    return this.servers.get(id);
+  }
+
+  findByToken(token: string): RegisteredServer | undefined {
+    return Array.from(this.servers.values()).find((s) => s.agentToken === token);
+  }
+
+  getLive(id: string): LiveServerState | undefined {
+    return this.live.get(id);
+  }
+
+  setOnline(id: string) {
+    const live = this.live.get(id);
+    if (live) {
+      live.connectionStatus = "online";
+      live.lastSeen = Date.now();
+    }
+  }
+
+  setOffline(id: string) {
+    const live = this.live.get(id);
+    if (live) {
+      live.connectionStatus = "offline";
+      live.lastSeen = Date.now();
+    }
+  }
+
+  updateMetrics(id: string, metrics: SystemMetrics) {
+    const live = this.live.get(id);
+    if (live) {
+      live.metrics = metrics;
+      live.lastSeen = Date.now();
+    }
+  }
+
+  updateProcesses(id: string, processes: PM2ProcessInfo[]) {
+    const live = this.live.get(id);
+    if (live) {
+      live.processes = processes;
+      live.lastSeen = Date.now();
+    }
+  }
+
+  pushLog(id: string, log: LogLine) {
+    const live = this.live.get(id);
+    if (!live) return;
+    live.recentLogs.push(log);
+    if (live.recentLogs.length > MAX_RECENT_LOGS) {
+      live.recentLogs.splice(0, live.recentLogs.length - MAX_RECENT_LOGS);
+    }
+  }
+
+  updateHealth(id: string, result: HealthCheckResult) {
+    const live = this.live.get(id);
+    if (live) {
+      live.health[result.processName] = result;
+    }
+  }
+
+  toSnapshot(id: string): ServerSnapshot | undefined {
+    const server = this.servers.get(id);
+    const live = this.live.get(id);
+    if (!server || !live) return undefined;
+    return {
+      id: server.id,
+      name: server.name,
+      environment: server.environment,
+      connectionStatus: live.connectionStatus,
+      lastSeen: live.lastSeen,
+      metrics: live.metrics,
+      processes: live.processes,
+      health: live.health,
+    };
+  }
+
+  allSnapshots(): ServerSnapshot[] {
+    return this.listServers()
+      .map((s) => this.toSnapshot(s.id))
+      .filter((s): s is ServerSnapshot => !!s);
+  }
+}
+
+export const store = new Store();
