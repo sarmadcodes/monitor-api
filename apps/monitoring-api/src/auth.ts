@@ -21,5 +21,7 @@ export async function requireAuth(req: FastifyRequest, reply: FastifyReply) {
   const session = token ? verifySession(token) : null;
   if (!session) {
     reply.code(401).send({ error: "Unauthorized" });
+    return;
   }
+  (req as FastifyRequest & { authUser?: string }).authUser = session.sub;
 }

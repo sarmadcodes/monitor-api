@@ -25,7 +25,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-bg">
       <TopBar />
-      <main className="mx-auto max-w-[1600px] px-5 py-6">{children}</main>
+      <main
+        className="mx-auto max-w-[1600px] px-4 py-5 sm:px-5 sm:py-6"
+        style={{ paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))" }}
+      >
+        {children}
+      </main>
     </div>
   );
 }

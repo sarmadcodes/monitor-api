@@ -1,5 +1,5 @@
 import type { WebSocket } from "ws";
-import type { AgentToApiMessage, ApiToAgentMessage } from "@infra-monitor/shared";
+import { normalizeLogLevel, type AgentToApiMessage, type ApiToAgentMessage } from "@infra-monitor/shared";
 import { store } from "../store";
 import { resolveAction } from "../pendingActions";
 import { broadcastToDashboards } from "./dashboardSocket";
@@ -76,13 +76,18 @@ export function handleAgentConnection(socket: WebSocket) {
         break;
       }
       case "log:batch": {
-        store.pushLogs(serverId, msg.data);
+        // Defense in depth: re-validate level server-side too, so a future
+        // agent build (or a different logger format) can never reintroduce
+        // the bug where an unrecognized level value made lines vanish from
+        // every level-filtered view instead of showing up as "unknown".
+        const sanitized = msg.data.map((l) => ({ ...l, level: normalizeLogLevel(l.level) }));
+        store.pushLogs(serverId, sanitized);
         const server = store.getServer(serverId);
         broadcastToDashboards({
           type: "log:batch",
           serverId,
           serverName: server?.name ?? "unknown",
-          data: msg.data,
+          data: sanitized,
         });
         break;
       }

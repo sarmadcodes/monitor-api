@@ -6,6 +6,8 @@ import type {
   LogLine,
   NginxStatus,
   PM2ProcessInfo,
+  PublicServerStatus,
+  PublicStatusResponse,
   ServerConnectionStatus,
   ServerSnapshot,
   SslCertInfo,
@@ -21,6 +23,7 @@ export interface RegisteredServer {
   agentToken: string;
   createdAt: number;
   healthUrls: Record<string, string>;
+  isPublicStatusEnabled: boolean;
 }
 
 interface PersistedData {
@@ -80,6 +83,7 @@ class Store {
     const persisted = loadPersisted();
     for (const s of persisted.servers) {
       s.healthUrls = s.healthUrls ?? {};
+      s.isPublicStatusEnabled = s.isPublicStatusEnabled ?? false;
       this.servers.set(s.id, s);
       this.live.set(s.id, freshLiveState());
     }
@@ -98,6 +102,7 @@ class Store {
       agentToken: nanoid(32),
       createdAt: Date.now(),
       healthUrls: {},
+      isPublicStatusEnabled: false,
     };
     this.servers.set(server.id, server);
     this.live.set(server.id, freshLiveState());
@@ -115,6 +120,14 @@ class Store {
     const server = this.servers.get(id);
     if (!server) return undefined;
     server.agentToken = nanoid(32);
+    this.persist();
+    return server;
+  }
+
+  setPublicStatusEnabled(id: string, enabled: boolean): RegisteredServer | undefined {
+    const server = this.servers.get(id);
+    if (!server) return undefined;
+    server.isPublicStatusEnabled = enabled;
     this.persist();
     return server;
   }
@@ -219,6 +232,7 @@ class Store {
       health: live.health,
       nginx: live.nginx,
       ssl: live.ssl,
+      isPublicStatusEnabled: server.isPublicStatusEnabled,
     };
   }
 
@@ -226,6 +240,56 @@ class Store {
     return this.listServers()
       .map((s) => this.toSnapshot(s.id))
       .filter((s): s is ServerSnapshot => !!s);
+  }
+
+  // Hand-built public DTO — deliberately does NOT reuse ServerSnapshot or
+  // spread the server object, so nothing (id, environment, health check
+  // URLs, agent token, etc.) can leak here just because a field got added
+  // elsewhere. Only servers with isPublicStatusEnabled=true are included.
+  publicStatus(): PublicStatusResponse {
+    const servers: PublicServerStatus[] = [];
+
+    for (const server of this.listServers()) {
+      if (!server.isPublicStatusEnabled) continue;
+      const live = this.live.get(server.id);
+      if (!live) continue;
+
+      const m = live.metrics;
+      const servicesTotal = live.processes.length;
+      const servicesHealthy = live.processes.filter((p) => p.status === "online").length;
+      const servicesDegraded = live.processes.filter(
+        (p) => p.status === "errored" || p.status === "restarting"
+      ).length;
+
+      let status: PublicServerStatus["status"] = "unknown";
+      if (live.connectionStatus === "offline") status = "offline";
+      else if (servicesDegraded > 0) status = "degraded";
+      else if (live.connectionStatus === "online") status = "operational";
+
+      servers.push({
+        name: server.name,
+        status,
+        cpuPercent: m ? Math.round(m.cpuUsagePercent) : null,
+        ramPercent: m ? Math.round((m.memUsedBytes / m.memTotalBytes) * 100) : null,
+        diskPercent: m?.diskPercent !== null && m?.diskPercent !== undefined ? Math.round(m.diskPercent) : null,
+        uptimeSeconds: m?.uptimeSeconds ?? null,
+        servicesTotal,
+        servicesHealthy,
+        servicesDegraded,
+        lastUpdated: live.lastSeen,
+      });
+    }
+
+    const overallStatus: PublicStatusResponse["overallStatus"] =
+      servers.length === 0
+        ? "unknown"
+        : servers.some((s) => s.status === "offline")
+          ? "offline"
+          : servers.some((s) => s.status === "degraded")
+            ? "degraded"
+            : "operational";
+
+    return { overallStatus, generatedAt: Date.now(), servers };
   }
 }
 

@@ -9,7 +9,15 @@ const loginSchema = z.object({
 });
 
 export async function authRoutes(app: FastifyInstance) {
-  app.post("/api/auth/login", async (req, reply) => {
+  app.post(
+    "/api/auth/login",
+    {
+      config: {
+        // Brute-force protection: far stricter than the API's global limit.
+        rateLimit: { max: 8, timeWindow: "5 minutes" },
+      },
+    },
+    async (req, reply) => {
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Invalid request" });
@@ -23,6 +31,10 @@ export async function authRoutes(app: FastifyInstance) {
       .setCookie(SESSION_COOKIE, token, {
         httpOnly: true,
         sameSite: "lax",
+        // Only mark the cookie Secure when the dashboard itself is served
+        // over HTTPS — hardcoding `true` would silently break local dev
+        // (http://localhost), where browsers refuse to store Secure cookies.
+        secure: config.dashboardOrigin.startsWith("https"),
         path: "/",
         maxAge: 60 * 60 * 12,
       })

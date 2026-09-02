@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import readline from "node:readline";
 import pm2 from "pm2";
-import type { LogLine } from "@infra-monitor/shared";
+import { normalizeLogLevel, type LogLine } from "@infra-monitor/shared";
 
 interface WatchEntry {
   path: string;
@@ -39,9 +39,13 @@ function parseLine(
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object") {
       message = String(parsed.message ?? parsed.msg ?? raw);
-      if (parsed.level) level = String(parsed.level).toLowerCase() as LogLine["level"];
-      if (parsed.timestamp) {
-        const t = Date.parse(parsed.timestamp);
+      if (parsed.level !== undefined) level = normalizeLogLevel(parsed.level);
+      // Pino/Bunyan use a Unix-ms epoch number for `time`, not an ISO string.
+      const rawTime = parsed.time ?? parsed.timestamp;
+      if (typeof rawTime === "number") {
+        timestamp = rawTime;
+      } else if (typeof rawTime === "string") {
+        const t = Date.parse(rawTime);
         if (!Number.isNaN(t)) timestamp = t;
       }
     }

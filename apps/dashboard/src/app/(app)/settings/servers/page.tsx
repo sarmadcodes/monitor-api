@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import clsx from "clsx";
 import { useDashboardStore } from "@/lib/store";
 import { api } from "@/lib/api";
 import { StatusDot } from "@/components/StatusDot";
@@ -41,6 +42,12 @@ export default function ServersSettingsPage() {
     if (!confirm("Rotate this server's agent token? The currently installed agent will stop authenticating.")) return;
     const result = await api.rotateToken(id);
     alert(`New token: ${result.agentToken}\n\nUpdate the agent's .env (AGENT_TOKEN) and restart it.`);
+  }
+
+  async function onTogglePublic(id: string, enabled: boolean) {
+    await api.setPublicStatus(id, enabled);
+    const server = useDashboardStore.getState().servers[id];
+    if (server) useDashboardStore.getState().upsertServer({ ...server, isPublicStatusEnabled: enabled });
   }
 
   return (
@@ -104,14 +111,15 @@ export default function ServersSettingsPage() {
         )}
       </div>
 
-      <div className="rounded-lg border border-bg-border bg-bg-panel">
-        <table className="w-full text-left text-sm">
+      <div className="overflow-x-auto rounded-lg border border-bg-border bg-bg-panel">
+        <table className="w-full min-w-[720px] text-left text-sm">
           <thead>
             <tr className="border-b border-bg-border text-[11px] uppercase tracking-wide text-status-muted">
               <th className="px-4 py-2.5">Status</th>
               <th className="px-4 py-2.5">Name</th>
               <th className="px-4 py-2.5">Environment</th>
               <th className="px-4 py-2.5">Services</th>
+              <th className="px-4 py-2.5">Public status</th>
               <th className="px-4 py-2.5"></th>
             </tr>
           </thead>
@@ -124,6 +132,19 @@ export default function ServersSettingsPage() {
                 <td className="px-4 py-2.5 font-medium text-white">{s.name}</td>
                 <td className="px-4 py-2.5 text-status-muted">{s.environment}</td>
                 <td className="mono px-4 py-2.5">{s.processes.length}</td>
+                <td className="px-4 py-2.5">
+                  <button
+                    onClick={() => onTogglePublic(s.id, !s.isPublicStatusEnabled)}
+                    className={clsx(
+                      "rounded-md border px-2 py-1 text-xs",
+                      s.isPublicStatusEnabled
+                        ? "border-status-healthy/40 text-status-healthy"
+                        : "border-bg-border text-status-muted hover:text-white"
+                    )}
+                  >
+                    {s.isPublicStatusEnabled ? "Shown on /status" : "Hidden from /status"}
+                  </button>
+                </td>
                 <td className="px-4 py-2.5 text-right">
                   <button
                     onClick={() => onRotate(s.id)}
@@ -142,7 +163,7 @@ export default function ServersSettingsPage() {
             ))}
             {servers.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-status-muted">
+                <td colSpan={6} className="px-4 py-8 text-center text-status-muted">
                   No servers yet.
                 </td>
               </tr>

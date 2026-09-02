@@ -52,8 +52,8 @@ export default function IncidentsPage() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-bg-border bg-bg-panel">
-        <table className="w-full text-left text-sm">
+      <div className="overflow-x-auto rounded-lg border border-bg-border bg-bg-panel">
+        <table className="w-full min-w-[720px] text-left text-sm">
           <thead>
             <tr className="border-b border-bg-border text-[11px] uppercase tracking-wide text-status-muted">
               <th className="px-4 py-2.5">Severity</th>

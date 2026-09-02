@@ -1,9 +1,11 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { requireAuth } from "../auth";
 import { sendToAgent } from "../ws/agentSocket";
 import { waitForAction } from "../pendingActions";
+import { recordAudit } from "../auditLog";
+import { store } from "../store";
 import type { ApiToAgentMessage } from "@infra-monitor/shared";
 
 const actionSchema = z.object({
@@ -32,7 +34,23 @@ export async function serviceRoutes(app: FastifyInstance) {
     app.post(`/api/services/${action}`, async (req, reply) => {
       const parsed = actionSchema.safeParse(req.body);
       if (!parsed.success) return reply.code(400).send({ error: "Invalid request" });
-      const result = await handleAction(action, parsed.data.serverId, parsed.data.processName);
+
+      const { serverId, processName } = parsed.data;
+      const user = (req as FastifyRequest & { authUser?: string }).authUser ?? "unknown";
+      const server = store.getServer(serverId);
+      const result = await handleAction(action, serverId, processName);
+
+      recordAudit({
+        timestamp: Date.now(),
+        user,
+        action,
+        serverId,
+        serverName: server?.name ?? "unknown",
+        processName,
+        result: result.ok ? "success" : "failure",
+        detail: result.ok ? undefined : result.error,
+      });
+
       if (!result.ok) return reply.code(502).send(result);
       reply.send(result);
     });

@@ -51,14 +51,45 @@ export interface PM2ProcessInfo {
   port: number | null;
 }
 
+export type LogLevel = "debug" | "info" | "warn" | "error" | "fatal" | "unknown";
+
 export interface LogLine {
   source: "pm2" | "nginx" | "agent";
   processName: string;
   stream: "stdout" | "stderr";
   timestamp: number;
-  level: "debug" | "info" | "warn" | "error" | "fatal" | "unknown";
+  level: LogLevel;
   message: string;
   raw: string;
+}
+
+const VALID_LEVELS: ReadonlySet<string> = new Set(["debug", "info", "warn", "error", "fatal", "unknown"]);
+
+// Pino (used by several of these apps) logs numeric level codes, not words:
+// 10=trace 20=debug 30=info 40=warn 50=error 60=fatal. Bunyan uses the same
+// scale. Anything else unrecognized becomes "unknown" rather than being
+// silently dropped by level-filtered UIs — a log line must never vanish
+// just because its source used a level format we didn't expect.
+const NUMERIC_LEVEL_MAP: Record<number, LogLevel> = {
+  10: "debug",
+  20: "debug",
+  30: "info",
+  40: "warn",
+  50: "error",
+  60: "fatal",
+};
+
+export function normalizeLogLevel(input: unknown): LogLevel {
+  if (typeof input === "number") {
+    return NUMERIC_LEVEL_MAP[input] ?? "unknown";
+  }
+  if (typeof input === "string") {
+    const lower = input.trim().toLowerCase();
+    if (VALID_LEVELS.has(lower)) return lower as LogLevel;
+    const asNumber = Number(lower);
+    if (!Number.isNaN(asNumber)) return NUMERIC_LEVEL_MAP[asNumber] ?? "unknown";
+  }
+  return "unknown";
 }
 
 export interface HealthCheckResult {
@@ -146,6 +177,7 @@ export interface ServerSnapshot {
   health: Record<string, HealthCheckResult>;
   nginx: NginxStatus | null;
   ssl: Record<string, SslCertInfo>;
+  isPublicStatusEnabled: boolean;
 }
 
 export type ApiToDashboardMessage =
@@ -158,6 +190,32 @@ export type ApiToDashboardMessage =
   | { type: "ssl:update"; serverId: string; data: SslCertInfo }
   | { type: "incident:created"; incident: Incident }
   | { type: "incident:updated"; incident: Incident };
+
+// ---- Public, unauthenticated status page ----
+// Deliberately a separate, hand-picked shape — never derived by stripping
+// fields off ServerSnapshot, so a future field added there can't leak here
+// by accident.
+
+export type PublicHealthStatus = "operational" | "degraded" | "offline" | "unknown";
+
+export interface PublicServerStatus {
+  name: string;
+  status: PublicHealthStatus;
+  cpuPercent: number | null;
+  ramPercent: number | null;
+  diskPercent: number | null;
+  uptimeSeconds: number | null;
+  servicesTotal: number;
+  servicesHealthy: number;
+  servicesDegraded: number;
+  lastUpdated: number | null;
+}
+
+export interface PublicStatusResponse {
+  overallStatus: PublicHealthStatus;
+  generatedAt: number;
+  servers: PublicServerStatus[];
+}
 
 export type DashboardToApiMessage =
   | { type: "action:restart"; serverId: string; processName: string }

@@ -82,6 +82,13 @@ export const api = {
       "/api/logs"
     ),
 
+  setPublicStatus: (id: string, enabled: boolean) =>
+    request<{ id: string; isPublicStatusEnabled: boolean }>(`/api/servers/${id}/public-status`, {
+      method: "POST",
+      body: JSON.stringify({ enabled }),
+    }),
+  getPublicStatus: () => request<import("@infra-monitor/shared").PublicStatusResponse>("/api/public/status"),
+
   listIncidents: () => request<import("@infra-monitor/shared").Incident[]>("/api/incidents"),
   acknowledgeIncident: (id: string) =>
     request<import("@infra-monitor/shared").Incident>(`/api/incidents/${id}/acknowledge`, { method: "POST" }),

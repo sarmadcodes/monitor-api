@@ -57,7 +57,13 @@ export async function serverRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.code(400).send({ error: "Invalid request" });
     const server = store.registerServer(parsed.data.name, parsed.data.description, parsed.data.environment);
     const hostname = req.hostname.includes(":") ? req.hostname.split(":")[0] : req.hostname;
-    const apiUrl = process.env.PUBLIC_API_URL ?? `http://${hostname}:${config.port}`;
+    // Real deployments sit behind Nginx terminating TLS, so any hostname
+    // that isn't plainly local dev gets https:// with no explicit port —
+    // don't rely on req.protocol here, since Fastify sees the plain-HTTP
+    // connection from the reverse proxy, not what the browser actually used.
+    const isLocalDev = hostname === "localhost" || /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname);
+    const apiUrl =
+      process.env.PUBLIC_API_URL ?? (isLocalDev ? `http://${hostname}:${config.port}` : `https://${hostname}`);
     reply.code(201).send({
       id: server.id,
       name: server.name,
@@ -90,5 +96,14 @@ export async function serverRoutes(app: FastifyInstance) {
     if (!server) return reply.code(404).send({ error: "Not found" });
     store.setHealthUrl(id, parsed.data.processName, parsed.data.url);
     reply.send({ ok: true });
+  });
+
+  app.post("/api/servers/:id/public-status", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const parsed = z.object({ enabled: z.boolean() }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "Invalid request" });
+    const server = store.setPublicStatusEnabled(id, parsed.data.enabled);
+    if (!server) return reply.code(404).send({ error: "Not found" });
+    reply.send({ id: server.id, isPublicStatusEnabled: server.isPublicStatusEnabled });
   });
 }

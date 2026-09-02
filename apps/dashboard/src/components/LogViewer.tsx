@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FixedSizeList, type ListOnScrollProps } from "react-window";
 import clsx from "clsx";
-import type { LogLine } from "@infra-monitor/shared";
+import { normalizeLogLevel, type LogLine } from "@infra-monitor/shared";
 import { formatTime } from "@/lib/format";
 
 const LEVEL_COLORS: Record<LogLine["level"], string> = {
@@ -52,13 +52,23 @@ export function LogViewer({
     setLive((v) => !v);
   }
 
+  // Belt-and-suspenders: normalize here too, so a stray unrecognized level
+  // value (a logger format we haven't seen yet) shows up under "unknown"
+  // instead of silently failing every level check and vanishing — that
+  // exact bug (Pino's numeric levels reaching the UI as literal "30"/"40")
+  // is what caused the log count to disagree with what actually rendered.
+  const normalized = useMemo(
+    () => source.map((l) => (l.level === undefined ? l : { ...l, level: normalizeLogLevel(l.level) })),
+    [source]
+  );
+
   const filtered = useMemo(() => {
-    return source.filter((l) => {
+    return normalized.filter((l) => {
       if (!levels.has(l.level)) return false;
       if (search && !l.raw.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [source, levels, search]);
+  }, [normalized, levels, search]);
 
   useEffect(() => {
     if (autoFollow && listRef.current && filtered.length > 0) {
@@ -148,7 +158,11 @@ export function LogViewer({
             </button>
           ))}
         </div>
-        <span className="mono text-[10px] text-status-muted">{filtered.length} lines</span>
+        <span className="mono text-[10px] text-status-muted">
+          {filtered.length === normalized.length
+            ? `${filtered.length} lines`
+            : `${filtered.length} shown / ${normalized.length} total`}
+        </span>
         <div className="ml-auto flex gap-1">
           <button onClick={copyAll} className="rounded-md border border-bg-border px-2 py-1 text-xs text-status-muted hover:text-white">
             Copy all

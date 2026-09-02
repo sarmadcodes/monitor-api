@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Menu, X } from "lucide-react";
 import clsx from "clsx";
 import { useDashboardStore } from "@/lib/store";
 import { api } from "@/lib/api";
@@ -25,12 +26,18 @@ export function TopBar() {
     (s) => Object.values(s.incidents).filter((i) => i.status !== "resolved").length
   );
   const [now, setNow] = useState<Date | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
     setNow(new Date());
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
+
+  // Close the drawer automatically whenever the route changes.
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [pathname]);
 
   const critical = servers.filter((s) => s.connectionStatus === "offline").length;
 
@@ -48,62 +55,124 @@ export function TopBar() {
     disconnected: "DISCONNECTED",
   }[wsStatus];
 
+  async function signOut() {
+    await api.logout();
+    router.replace("/login");
+  }
+
   return (
-    <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-bg-border bg-bg-panel/95 px-5 backdrop-blur">
-      <div className="flex items-center gap-8">
-        <Link href="/" className="mono text-sm font-semibold tracking-tight text-white">
-          sarmad<span className="text-status-info">.tech</span>
-        </Link>
-        <nav className="flex items-center gap-1">
+    <header
+      className="sticky top-0 z-30 border-b border-bg-border bg-bg-panel/95 backdrop-blur"
+      style={{ paddingTop: "env(safe-area-inset-top)" }}
+    >
+      <div className="flex h-14 items-center justify-between px-4 sm:px-5">
+        <div className="flex items-center gap-8">
+          <Link href="/" className="mono text-sm font-semibold tracking-tight text-white">
+            sarmad<span className="text-status-info">.tech</span>
+          </Link>
+          <nav className="hidden items-center gap-1 md:flex">
+            {NAV.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={clsx(
+                  "rounded-md px-3 py-1.5 text-sm transition",
+                  pathname === item.href ? "bg-bg-raised text-white" : "text-status-muted hover:text-white"
+                )}
+              >
+                {item.label}
+                {item.href === "/incidents" && openIncidents > 0 && (
+                  <span className="ml-1.5 rounded-full bg-status-critical/20 px-1.5 py-0.5 text-[10px] text-status-critical">
+                    {openIncidents}
+                  </span>
+                )}
+              </Link>
+            ))}
+          </nav>
+        </div>
+
+        {/* Desktop status strip */}
+        <div className="mono hidden items-center gap-4 text-xs text-status-muted md:flex">
+          <span>
+            {servers.length} SERVERS ·{" "}
+            {critical > 0 ? (
+              <span className="text-status-critical">{critical} OFFLINE</span>
+            ) : (
+              <span className="text-status-healthy">ALL ONLINE</span>
+            )}
+          </span>
+          <span className={clsx("flex items-center gap-1.5 font-medium", statusColor)}>
+            <span
+              className={clsx(
+                "inline-block h-1.5 w-1.5 rounded-full",
+                wsStatus === "connected" ? "bg-status-healthy live-dot" : "bg-current"
+              )}
+            />
+            {statusLabel}
+          </span>
+          {now && <span>{now.toLocaleTimeString([], { hour12: false })}</span>}
+          <button
+            onClick={signOut}
+            className="rounded-md border border-bg-border px-2 py-1 text-status-muted transition hover:text-white"
+          >
+            Sign out
+          </button>
+        </div>
+
+        {/* Mobile: connection dot + hamburger */}
+        <div className="flex items-center gap-3 md:hidden">
+          <span
+            className={clsx(
+              "inline-block h-2 w-2 rounded-full",
+              wsStatus === "connected" ? "bg-status-healthy live-dot" : "bg-status-warning"
+            )}
+            aria-label={statusLabel}
+          />
+          <button
+            onClick={() => setDrawerOpen((v) => !v)}
+            aria-label={drawerOpen ? "Close menu" : "Open menu"}
+            aria-expanded={drawerOpen}
+            className="flex h-11 w-11 items-center justify-center text-white"
+          >
+            {drawerOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile drawer */}
+      {drawerOpen && (
+        <nav className="border-t border-bg-border bg-bg-panel md:hidden">
           {NAV.map((item) => (
             <Link
               key={item.href}
               href={item.href}
               className={clsx(
-                "rounded-md px-3 py-1.5 text-sm transition",
-                pathname === item.href
-                  ? "bg-bg-raised text-white"
-                  : "text-status-muted hover:text-white"
+                "flex min-h-[48px] items-center justify-between border-b border-bg-border/60 px-5 text-[15px]",
+                pathname === item.href ? "bg-bg-raised text-white" : "text-status-muted"
               )}
             >
               {item.label}
               {item.href === "/incidents" && openIncidents > 0 && (
-                <span className="ml-1.5 rounded-full bg-status-critical/20 px-1.5 py-0.5 text-[10px] text-status-critical">
+                <span className="rounded-full bg-status-critical/20 px-1.5 py-0.5 text-[10px] text-status-critical">
                   {openIncidents}
                 </span>
               )}
             </Link>
           ))}
+          <div className="mono flex items-center justify-between px-5 py-3 text-xs text-status-muted">
+            <span>
+              {servers.length} servers · {critical > 0 ? `${critical} offline` : "all online"}
+            </span>
+            {now && <span>{now.toLocaleTimeString([], { hour12: false })}</span>}
+          </div>
+          <button
+            onClick={signOut}
+            className="flex min-h-[48px] w-full items-center px-5 text-[15px] text-status-critical"
+          >
+            Sign out
+          </button>
         </nav>
-      </div>
-      <div className="mono flex items-center gap-4 text-xs text-status-muted">
-        <span>
-          {servers.length} SERVERS · {critical > 0 ? (
-            <span className="text-status-critical">{critical} OFFLINE</span>
-          ) : (
-            <span className="text-status-healthy">ALL ONLINE</span>
-          )}
-        </span>
-        <span className={clsx("flex items-center gap-1.5 font-medium", statusColor)}>
-          <span
-            className={clsx(
-              "inline-block h-1.5 w-1.5 rounded-full",
-              wsStatus === "connected" ? "bg-status-healthy live-dot" : "bg-current"
-            )}
-          />
-          {statusLabel}
-        </span>
-        {now && <span>{now.toLocaleTimeString([], { hour12: false })}</span>}
-        <button
-          onClick={async () => {
-            await api.logout();
-            router.replace("/login");
-          }}
-          className="rounded-md border border-bg-border px-2 py-1 text-status-muted transition hover:text-white"
-        >
-          Sign out
-        </button>
-      </div>
+      )}
     </header>
   );
 }
