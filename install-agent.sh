@@ -57,12 +57,13 @@ else
   git clone --depth 1 "$REPO_URL" "$INSTALL_DIR"
 fi
 
-cd "$INSTALL_DIR/apps/agent"
-# devDependencies are required here (typescript provides `tsc` for the build
-# step below) — do not use --omit=dev before building.
+# npm install must run from the repo root so the @infra-monitor/shared
+# workspace package gets symlinked into node_modules — running it from
+# apps/agent alone leaves that import unresolved at build time.
+cd "$INSTALL_DIR"
 npm install
-npm run build
-npm prune --omit=dev
+npm run build -w packages/shared
+npm run build -w apps/agent
 
 # 5. config
 cat > "$INSTALL_DIR/apps/agent/.env" <<EOF
