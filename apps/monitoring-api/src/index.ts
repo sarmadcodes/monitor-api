@@ -15,6 +15,7 @@ import { handleDashboardConnection } from "./ws/dashboardSocket";
 import { startHealthChecker } from "./healthChecker";
 import { startSslChecker } from "./sslChecker";
 import { verifySession, SESSION_COOKIE } from "./auth";
+import { isBlocked } from "./loginSecurity";
 
 async function main() {
   const app = Fastify({ logger: true, trustProxy: true });
@@ -79,6 +80,10 @@ async function main() {
   // used for REST calls. Also exempt from rate limiting for the same reason.
   app.register(async (instance) => {
     instance.get("/ws", { websocket: true, config: { rateLimit: false } }, (socket, req) => {
+      if (isBlocked(req.ip)) {
+        socket.close(4403, "blocked");
+        return;
+      }
       const token = (req.cookies as Record<string, string>)[SESSION_COOKIE];
       const session = token ? verifySession(token) : null;
       if (!session) {

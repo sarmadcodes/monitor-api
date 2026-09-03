@@ -5,6 +5,7 @@ import clsx from "clsx";
 import { useDashboardStore } from "@/lib/store";
 import { api } from "@/lib/api";
 import { StatusDot } from "@/components/StatusDot";
+import { BlockedIpsPanel } from "@/components/BlockedIpsPanel";
 
 export default function ServersSettingsPage() {
   const servers = useDashboardStore((s) => Object.values(s.servers));
@@ -242,6 +243,8 @@ export default function ServersSettingsPage() {
           </tbody>
         </table>
       </div>
+
+      <BlockedIpsPanel />
     </>
   );
 }
