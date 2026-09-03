@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Menu, X } from "lucide-react";
+import { ChevronLeft, Menu, X } from "lucide-react";
 import clsx from "clsx";
 import { useDashboardStore } from "@/lib/store";
 import { api } from "@/lib/api";
@@ -27,6 +27,7 @@ export function TopBar() {
   );
   const [now, setNow] = useState<Date | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     setNow(new Date());
@@ -40,6 +41,7 @@ export function TopBar() {
   }, [pathname]);
 
   const critical = servers.filter((s) => s.connectionStatus === "offline").length;
+  const isRoot = pathname === "/";
 
   const statusColor = {
     connected: "text-status-healthy",
@@ -56,8 +58,17 @@ export function TopBar() {
   }[wsStatus];
 
   async function signOut() {
-    await api.logout();
-    router.replace("/login");
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await api.logout();
+    } catch {
+      // Even if the network call fails, the goal is to get the user off an
+      // authenticated screen — a stale server-side cookie just means the
+      // next protected request 401s and bounces them back to /login anyway.
+    } finally {
+      router.replace("/login");
+    }
   }
 
   return (
@@ -66,7 +77,18 @@ export function TopBar() {
       style={{ paddingTop: "env(safe-area-inset-top)" }}
     >
       <div className="flex h-14 items-center justify-between px-4 sm:px-5">
-        <div className="flex items-center gap-8">
+        <div className="flex items-center gap-2 sm:gap-8">
+          {/* Mobile back button — hidden on the root Overview page, where
+              there's nowhere sensible to go back to. */}
+          {!isRoot && (
+            <button
+              onClick={() => router.back()}
+              aria-label="Go back"
+              className="-ml-2 flex h-11 w-11 items-center justify-center text-white md:hidden"
+            >
+              <ChevronLeft size={22} />
+            </button>
+          )}
           <Link href="/" className="mono text-sm font-semibold tracking-tight text-white">
             sarmad<span className="text-status-info">.tech</span>
           </Link>
@@ -113,9 +135,10 @@ export function TopBar() {
           {now && <span>{now.toLocaleTimeString([], { hour12: false })}</span>}
           <button
             onClick={signOut}
-            className="rounded-md border border-bg-border px-2 py-1 text-status-muted transition hover:text-white"
+            disabled={signingOut}
+            className="rounded-md border border-bg-border px-2 py-1 text-status-muted transition hover:text-white disabled:opacity-50"
           >
-            Sign out
+            {signingOut ? "Signing out…" : "Sign out"}
           </button>
         </div>
 
@@ -141,7 +164,7 @@ export function TopBar() {
 
       {/* Mobile drawer */}
       {drawerOpen && (
-        <nav className="border-t border-bg-border bg-bg-panel md:hidden">
+        <nav className="max-h-[calc(100vh-3.5rem)] overflow-y-auto border-t border-bg-border bg-bg-panel md:hidden">
           {NAV.map((item) => (
             <Link
               key={item.href}
@@ -167,9 +190,10 @@ export function TopBar() {
           </div>
           <button
             onClick={signOut}
-            className="flex min-h-[48px] w-full items-center px-5 text-[15px] text-status-critical"
+            disabled={signingOut}
+            className="flex min-h-[48px] w-full items-center px-5 text-[15px] text-status-critical disabled:opacity-50"
           >
-            Sign out
+            {signingOut ? "Signing out…" : "Sign out"}
           </button>
         </nav>
       )}

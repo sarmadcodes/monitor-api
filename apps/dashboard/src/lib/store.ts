@@ -18,6 +18,7 @@ interface DashboardState {
   setWsStatus: (status: WsStatus) => void;
   setSnapshot: (servers: ServerSnapshot[], incidents: Incident[]) => void;
   upsertServer: (server: ServerSnapshot) => void;
+  removeServer: (serverId: string) => void;
   markOffline: (serverId: string, lastSeen: number) => void;
   markOnline: (serverId: string) => void;
   appendLogBatch: (serverId: string, serverName: string, logs: LogLine[]) => void;
@@ -53,6 +54,12 @@ export const useDashboardStore = create<DashboardState>((set) => ({
       servers: { ...state.servers, [server.id]: server },
       lastUpdate: Date.now(),
     })),
+
+  removeServer: (serverId) =>
+    set((state) => {
+      const { [serverId]: _removed, ...rest } = state.servers;
+      return { servers: rest };
+    }),
 
   markOffline: (serverId, lastSeen) =>
     set((state) => {

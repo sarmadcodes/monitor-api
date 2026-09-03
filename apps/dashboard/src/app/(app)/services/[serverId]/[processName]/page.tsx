@@ -99,22 +99,22 @@ export default function ServiceDetailPage() {
         <span className="text-status-muted">{proc.name}</span>
       </div>
 
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
             <StatusDot color={status.color} pulse={status.color === "healthy"} />
-            <h1 className="text-xl font-semibold text-white">{proc.name}</h1>
+            <h1 className="text-xl font-semibold text-white break-all">{proc.name}</h1>
             <span className="mono text-xs text-status-muted">{status.label}</span>
           </div>
           <p className="mt-0.5 text-sm text-status-muted">{server.name}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {actions.map((action) => (
             <button
               key={action}
               onClick={() => setConfirmAction(action)}
               disabled={actionPending !== null}
-              className="rounded-md border border-bg-border px-3 py-1.5 text-sm capitalize text-status-muted transition hover:border-status-info hover:text-white disabled:opacity-50"
+              className="min-h-[40px] flex-1 rounded-md border border-bg-border px-3 text-sm capitalize text-status-muted transition hover:border-status-info hover:text-white disabled:opacity-50 sm:flex-none"
             >
               {actionPending === action ? "Working…" : action}
             </button>
@@ -125,7 +125,7 @@ export default function ServiceDetailPage() {
       {actionError && <p className="mb-4 text-sm text-status-critical">{actionError}</p>}
 
       {confirmAction && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-sm rounded-lg border border-bg-border bg-bg-panel p-5">
             <h3 className="mb-2 font-semibold text-white capitalize">
               {confirmAction} {proc.name}?
@@ -136,13 +136,13 @@ export default function ServiceDetailPage() {
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setConfirmAction(null)}
-                className="rounded-md border border-bg-border px-3 py-1.5 text-sm text-status-muted hover:text-white"
+                className="min-h-[40px] rounded-md border border-bg-border px-3 text-sm text-status-muted hover:text-white"
               >
                 Cancel
               </button>
               <button
                 onClick={() => runAction(confirmAction)}
-                className="rounded-md bg-status-critical px-3 py-1.5 text-sm font-medium text-white hover:bg-red-600"
+                className="min-h-[40px] rounded-md bg-status-critical px-3 text-sm font-medium text-white hover:bg-red-600"
               >
                 Confirm {confirmAction}
               </button>
@@ -151,13 +151,13 @@ export default function ServiceDetailPage() {
         </div>
       )}
 
-      <div className="mb-5 flex gap-1 border-b border-bg-border">
+      <div className="mb-5 flex gap-1 overflow-x-auto border-b border-bg-border">
         {(["overview", "logs", "health", "configuration"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={clsx(
-              "border-b-2 px-3 py-2 text-sm capitalize transition",
+              "min-h-[40px] shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm capitalize transition",
               tab === t ? "border-status-info text-white" : "border-transparent text-status-muted hover:text-white"
             )}
           >

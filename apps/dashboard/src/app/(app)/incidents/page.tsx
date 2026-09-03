@@ -52,7 +52,62 @@ export default function IncidentsPage() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-bg-border bg-bg-panel">
+      {/* Mobile: one card per incident. */}
+      <div className="divide-y divide-bg-border rounded-lg border border-bg-border bg-bg-panel md:hidden">
+        {filtered.map((incident) => (
+          <div key={incident.id} className="px-4 py-3">
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="flex items-center gap-2 font-medium text-white">
+                <StatusDot
+                  color={incident.severity === "critical" ? "critical" : incident.severity === "warning" ? "warning" : "info"}
+                />
+                {incident.serverName}
+              </span>
+              <span
+                className={clsx(
+                  "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase",
+                  incident.status === "open" && "bg-status-critical/15 text-status-critical",
+                  incident.status === "acknowledged" && "bg-status-warning/15 text-status-warning",
+                  incident.status === "resolved" && "bg-status-healthy/15 text-status-healthy"
+                )}
+              >
+                {incident.status}
+              </span>
+            </div>
+            <p className="mb-1.5 text-sm text-gray-300">{incident.message}</p>
+            <div className="mono flex flex-wrap gap-x-3 gap-y-1 text-xs text-status-muted">
+              {incident.processName && <span className="text-status-info/80">{incident.processName}</span>}
+              <span>{formatTime(incident.detectedAt)}</span>
+              {incident.resolvedAt && <span>resolved {formatRelativeTime(incident.resolvedAt)}</span>}
+            </div>
+            {incident.status !== "resolved" && (
+              <div className="mt-2 flex gap-2">
+                {incident.status === "open" && (
+                  <button
+                    onClick={() => acknowledge(incident.id)}
+                    className="min-h-[36px] rounded-md border border-bg-border px-3 text-xs text-status-muted"
+                  >
+                    Acknowledge
+                  </button>
+                )}
+                <button
+                  onClick={() => resolve(incident.id)}
+                  className="min-h-[36px] rounded-md border border-bg-border px-3 text-xs text-status-muted"
+                >
+                  Resolve
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+        {filtered.length === 0 && (
+          <p className="px-4 py-10 text-center text-sm text-status-muted">
+            No incidents{filter !== "all" ? ` with status "${filter}"` : ""}.
+          </p>
+        )}
+      </div>
+
+      <div className="hidden overflow-x-auto rounded-lg border border-bg-border bg-bg-panel md:block">
         <table className="w-full min-w-[720px] text-left text-sm">
           <thead>
             <tr className="border-b border-bg-border text-[11px] uppercase tracking-wide text-status-muted">

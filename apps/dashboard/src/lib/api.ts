@@ -6,7 +6,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     credentials: "include",
     headers: {
-      "Content-Type": "application/json",
+      // Only declare a JSON body when we're actually sending one — setting
+      // this on a bodyless POST (logout, rotate-token, acknowledge/resolve
+      // incident) made the browser reject the request outright ("Body
+      // cannot be empty when content-type is set to 'application/json'"),
+      // which silently broke every one of those buttons: the thrown error
+      // was never caught, so e.g. sign-out's router.replace("/login") after
+      // it never ran and the button appeared to do nothing.
+      ...(init?.body ? { "Content-Type": "application/json" } : {}),
       ...init?.headers,
     },
   });

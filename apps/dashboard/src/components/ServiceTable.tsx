@@ -95,7 +95,39 @@ export function ServiceTable({ servers, filter }: { servers: ServerSnapshot[]; f
           />
         </div>
       )}
-      <div className="overflow-x-auto">
+      {/* Mobile: one card per service instead of a cramped table. */}
+      <div className="divide-y divide-bg-border md:hidden">
+        {sorted.map((row) => (
+          <Link
+            key={`${row.serverId}:${row.processName}`}
+            href={`/services/${row.serverId}/${encodeURIComponent(row.processName)}`}
+            className="block px-4 py-3 active:bg-bg-raised/60"
+          >
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="flex items-center gap-2 font-medium text-white">
+                <StatusDot color={row.status.color} pulse={row.status.color === "healthy"} />
+                {row.processName}
+              </span>
+              <span className="text-xs text-status-muted">{row.status.label}</span>
+            </div>
+            <div className="mono flex flex-wrap gap-x-3 gap-y-1 text-xs text-status-muted">
+              <span>{row.serverName}</span>
+              <span>CPU {row.cpu.toFixed(1)}%</span>
+              <span>{formatBytes(row.memory)}</span>
+              <span>{row.restarts} restarts</span>
+              {row.responseMs !== null && <span>{row.responseMs}ms</span>}
+            </div>
+            {row.lastError && <p className="mt-1 truncate text-xs text-status-critical">{row.lastError}</p>}
+          </Link>
+        ))}
+        {sorted.length === 0 && (
+          <p className="px-4 py-10 text-center text-sm text-status-muted">
+            No services discovered yet. Register a server and install the agent to see PM2 processes here.
+          </p>
+        )}
+      </div>
+
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-bg-border text-[11px] uppercase tracking-wide text-status-muted">
