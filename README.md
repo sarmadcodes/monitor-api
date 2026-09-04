@@ -99,22 +99,67 @@ touching PM2.
 glanceable tiles, a services list, and recent warnings/errors, with a
 fullscreen button and no required interaction.
 
-## Security notes (Phase 1)
+## Security
 
 - Single admin user via `ADMIN_USERNAME`/`ADMIN_PASSWORD` env vars, session
-  is a signed JWT in an httpOnly cookie.
+  is a signed JWT in an httpOnly, Secure (when served over HTTPS), SameSite
+  cookie.
+- **Email-based 2FA**: a correct password doesn't issue a session — it emails
+  a 6-digit code (5 min expiry, 5 attempt cap) to `ALERT_TO_EMAIL`, and only
+  the matching code completes login. If SMTP isn't configured, this fails
+  *safe*, not closed: login works with just the password rather than
+  becoming permanently unreachable because a Gmail app password expired.
+  Deliberately never fails toward "nobody can ever get in."
+- **Brute-force response**: every failed login attempt (wrong password *or*
+  wrong OTP) emails you the exact username/password (or code) that was
+  tried, plus IP and user agent. The 3rd failure from an IP permanently
+  blocks it from `/api/auth/login` and the dashboard WebSocket (the public
+  `/status` page still loads for them) — see Settings → Servers → Blocked
+  IPs to review or lift a block. If you ever block your own IP, the only
+  recovery is editing `BLOCKED_IPS_FILE` directly on the VPS and restarting
+  the API; there's no self-service unblock without an authenticated session.
 - Agent tokens are random 32-char ids, generated server-side, never sent to
   the browser after initial display.
-- PM2 actions go through an explicit allowlist (`restart`/`reload`/`stop`)
-  validated against real process names on the agent — there is no generic
-  command-execution endpoint.
+- PM2 actions go through an explicit allowlist (`restart`/`reload`/`stop`/
+  `start`) validated against real process names on the agent — there is no
+  generic command-execution endpoint, and there is deliberately no remote
+  terminal. A live shell over the dashboard's WebSocket is architecturally
+  the same class of feature as the actions above, but a stolen session
+  cookie then means full server compromise instead of "can restart one
+  service" — not worth it for a single-admin, no-MFA-on-the-VPS-itself app.
+  A safer middle ground, if ever needed, is a fixed allowlisted command
+  palette rather than a real shell.
+- Helmet (CSP/HSTS/Permissions-Policy), rate limiting (global + a much
+  stricter cap on login/OTP), and a central error handler that never leaks
+  stack traces to clients.
 - Nothing in `apps/agent` or `apps/monitoring-api` requires database
   credentials, SMTP passwords, or Cloudinary secrets from your applications —
   the monitor only needs process names and optional public health-check URLs.
+
+### What this does *not* cover
+
+No web app is "100% secure," and it's worth being explicit about what's
+outside this app's own hardening:
+
+- **The VPS itself** — SSH hardening, firewall rules, OS patching, and
+  every other app sharing that server are outside this repo's control. A
+  compromise there affects this app regardless of how solid its own code is.
+- **No DDoS/WAF layer** — Nginx + Fastify alone won't absorb a serious
+  volumetric attack. Cloudflare's free tier in front would help.
+- **No backups** — registered servers, the audit log, and the IP blocklist
+  live only on the VPS's disk (`DATA_FILE`, `BLOCKED_IPS_FILE`). Worth a
+  periodic off-box backup.
+- **The source is public on GitHub** (needed to work around GitHub's
+  anonymous-clone rate limiting from this VPS's IP during setup) — so the
+  exact security logic, including these thresholds, is visible to anyone.
+  Not a vulnerability by itself, but not hidden either.
+- `npm audit` still flags a handful of high-severity Next.js advisories
+  whose fix is a major version jump (14→16) — deliberately not forced
+  blind; that upgrade needs its own dedicated testing pass before shipping.
 - **Rotate the secrets that were pasted into this session's terminal output**
-  (MongoDB password, Gmail app password, Cloudinary secret, JWT_SECRET for
-  whatson-api) — they are not used by anything in this repo, but they were
-  exposed in plaintext and should be treated as compromised.
+  early on (MongoDB password, Gmail app password, Cloudinary secret,
+  JWT_SECRET for whatson-api) — they are not used by anything in this repo,
+  but they were exposed in plaintext and should be treated as compromised.
 
 ## What's not built yet (by design — see Phase 2/3 in the spec)
 

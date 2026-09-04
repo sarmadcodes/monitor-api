@@ -36,22 +36,28 @@ export interface LoginResult {
   username?: string;
   error?: string;
   blocked?: boolean;
+  otpRequired?: boolean;
+  otpSkipped?: boolean;
+  tempToken?: string;
+}
+
+async function rawAuthCall(path: string, body: unknown): Promise<LoginResult> {
+  const res = await fetch(`${API_URL}${path}`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const parsed = await res.json().catch(() => ({}));
+  return { ok: res.ok, ...parsed };
 }
 
 export const api = {
   // Deliberately bypasses request()'s throw-on-!ok behavior: a failed login
-  // still carries meaningful data (the permanent-ban message) that the
-  // login page needs to read, not just an error to swallow.
-  login: async (username: string, password: string): Promise<LoginResult> => {
-    const res = await fetch(`${API_URL}/api/auth/login`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
-    });
-    const body = await res.json().catch(() => ({}));
-    return { ok: res.ok, ...body };
-  },
+  // still carries meaningful data (the permanent-ban message, or the OTP
+  // step) that the login page needs to read, not just an error to swallow.
+  login: (username: string, password: string) => rawAuthCall("/api/auth/login", { username, password }),
+  verifyOtp: (tempToken: string, code: string) => rawAuthCall("/api/auth/verify-otp", { tempToken, code }),
   logout: () => request("/api/auth/logout", { method: "POST" }),
   me: () => request<{ username: string }>("/api/auth/me"),
   listBlockedIps: () =>

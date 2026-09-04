@@ -5,30 +5,63 @@ import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
 
+type Stage = "credentials" | "otp";
+
 export default function LoginPage() {
   const router = useRouter();
+  const [stage, setStage] = useState<Stage>("credentials");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [code, setCode] = useState("");
+  const [tempToken, setTempToken] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [blocked, setBlocked] = useState(false);
 
-  async function onSubmit(e: React.FormEvent) {
+  async function onSubmitCredentials(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
       const result = await api.login(username, password);
-      if (result.ok) {
-        router.replace("/");
-        return;
-      }
       if (result.blocked) {
         setBlocked(true);
         return;
       }
+      if (result.ok && result.otpRequired && result.tempToken) {
+        setTempToken(result.tempToken);
+        setStage("otp");
+        return;
+      }
+      if (result.ok) {
+        // otpSkipped case — SMTP isn't configured, session was issued directly.
+        router.replace("/");
+        return;
+      }
       setError(result.error ?? "Login failed");
+    } catch {
+      setError("Unable to reach the server. Check your connection and try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onSubmitOtp(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const result = await api.verifyOtp(tempToken, code);
+      if (result.blocked) {
+        setBlocked(true);
+        return;
+      }
+      if (result.ok) {
+        router.replace("/");
+        return;
+      }
+      setError(result.error ?? "Incorrect code");
     } catch {
       setError("Unable to reach the server. Check your connection and try again.");
     } finally {
@@ -67,9 +100,9 @@ export default function LoginPage() {
             <p className="mono text-lg font-bold text-status-critical">sarmad has blocked u congrats</p>
             <p className="mt-2 text-sm text-status-muted">Nice try. This is going nowhere from here.</p>
           </div>
-        ) : (
+        ) : stage === "credentials" ? (
           <form
-            onSubmit={onSubmit}
+            onSubmit={onSubmitCredentials}
             noValidate
             className="rounded-lg border border-bg-border bg-bg-panel/90 p-6 shadow-[0_0_40px_rgba(0,0,0,0.4)] backdrop-blur"
           >
@@ -128,6 +161,59 @@ export default function LoginPage() {
             >
               {loading && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
               {loading ? "Signing in…" : "Sign in"}
+            </button>
+          </form>
+        ) : (
+          <form
+            onSubmit={onSubmitOtp}
+            noValidate
+            className="rounded-lg border border-bg-border bg-bg-panel/90 p-6 shadow-[0_0_40px_rgba(0,0,0,0.4)] backdrop-blur"
+          >
+            <p className="mb-4 text-sm text-status-muted">
+              We emailed a 6-digit code to your inbox. Enter it below — it expires in 5 minutes.
+            </p>
+            <div className="mb-5">
+              <label htmlFor="code" className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-status-muted">
+                Verification code
+              </label>
+              <input
+                id="code"
+                name="code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                required
+                className="mono w-full rounded-md border border-bg-border bg-bg-raised px-3 py-2.5 text-center text-lg tracking-[0.3em] text-white outline-none transition focus:border-status-info focus:ring-1 focus:ring-status-info"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                autoFocus
+              />
+            </div>
+
+            {error && (
+              <p role="alert" className="mb-4 rounded-md border border-status-critical/30 bg-status-critical/[0.08] px-3 py-2 text-sm text-status-critical">
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading || code.length !== 6}
+              className="flex w-full items-center justify-center gap-2 rounded-md bg-status-info px-3 py-2.5 text-sm font-medium text-white transition hover:bg-blue-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-status-info focus-visible:ring-offset-2 focus-visible:ring-offset-bg-panel disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
+              {loading ? "Verifying…" : "Verify"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setStage("credentials");
+                setCode("");
+                setError(null);
+              }}
+              className="mt-3 w-full text-center text-xs text-status-muted hover:text-white"
+            >
+              ← Back to login
             </button>
           </form>
         )}
