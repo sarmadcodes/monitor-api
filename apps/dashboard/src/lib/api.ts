@@ -35,21 +35,19 @@ export interface LoginResult {
   ok: boolean;
   username?: string;
   error?: string;
-  challenge?: boolean;
-  question?: string;
   blocked?: boolean;
 }
 
 export const api = {
   // Deliberately bypasses request()'s throw-on-!ok behavior: a failed login
-  // still carries meaningful data (the taunt challenge, or the permanent-ban
-  // message) that the login page needs to read, not just an error to swallow.
-  login: async (username: string, password: string, nickname?: string): Promise<LoginResult> => {
+  // still carries meaningful data (the permanent-ban message) that the
+  // login page needs to read, not just an error to swallow.
+  login: async (username: string, password: string): Promise<LoginResult> => {
     const res = await fetch(`${API_URL}/api/auth/login`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password, nickname }),
+      body: JSON.stringify({ username, password }),
     });
     const body = await res.json().catch(() => ({}));
     return { ok: res.ok, ...body };
@@ -57,9 +55,14 @@ export const api = {
   logout: () => request("/api/auth/logout", { method: "POST" }),
   me: () => request<{ username: string }>("/api/auth/me"),
   listBlockedIps: () =>
-    request<Array<{ ip: string; blockedAt: number; userAgent: string | null; nicknameGuess: string | null }>>(
-      "/api/auth/blocked-ips"
-    ),
+    request<
+      Array<{
+        ip: string;
+        blockedAt: number;
+        userAgent: string | null;
+        attempts: Array<{ attemptNumber: number; username: string; password: string; timestamp: number }>;
+      }>
+    >("/api/auth/blocked-ips"),
   unblockIp: (ip: string) => request(`/api/auth/blocked-ips/${encodeURIComponent(ip)}/unblock`, { method: "POST" }),
 
   listServers: () => request<import("@infra-monitor/shared").ServerSnapshot[]>("/api/servers"),

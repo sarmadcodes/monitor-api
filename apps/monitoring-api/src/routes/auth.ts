@@ -2,23 +2,11 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { config } from "../config";
 import { signSession, verifySession, requireAuth, SESSION_COOKIE } from "../auth";
-import {
-  BLOCK_MESSAGE,
-  getChallengeQuestion,
-  isBlocked,
-  listBlocked,
-  recordFailedLogin,
-  resetFailures,
-  unblock,
-} from "../loginSecurity";
+import { BLOCK_MESSAGE, isBlocked, listBlocked, recordFailedLogin, resetFailures, unblock } from "../loginSecurity";
 
 const loginSchema = z.object({
   username: z.string().min(1),
   password: z.string().min(1),
-  // Only present once the challenge has been shown — an unauthenticated
-  // guess at "Sarmad's nickname". Never validated against anything; the
-  // point is purely to bait a reply worth reading, then block the IP.
-  nickname: z.string().max(200).optional(),
 });
 
 export async function authRoutes(app: FastifyInstance) {
@@ -40,7 +28,7 @@ export async function authRoutes(app: FastifyInstance) {
       if (!parsed.success) {
         return reply.code(400).send({ error: "Invalid request" });
       }
-      const { username, password, nickname } = parsed.data;
+      const { username, password } = parsed.data;
 
       if (username === config.adminUsername && password === config.adminPassword) {
         resetFailures(ip);
@@ -60,14 +48,9 @@ export async function authRoutes(app: FastifyInstance) {
         return;
       }
 
-      const outcome = await recordFailedLogin(ip, req.headers["user-agent"] ?? null, nickname ?? null);
+      const outcome = await recordFailedLogin(ip, req.headers["user-agent"] ?? null, username, password);
       if (outcome.action === "block") {
         return reply.code(403).send({ error: BLOCK_MESSAGE, blocked: true });
-      }
-      if (outcome.action === "challenge") {
-        return reply
-          .code(401)
-          .send({ error: "Invalid credentials", challenge: true, question: getChallengeQuestion() });
       }
       return reply.code(401).send({ error: "Invalid credentials" });
     }

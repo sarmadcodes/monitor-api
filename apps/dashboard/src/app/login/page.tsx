@@ -12,8 +12,6 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [challengeQuestion, setChallengeQuestion] = useState<string | null>(null);
-  const [nickname, setNickname] = useState("");
   const [blocked, setBlocked] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
@@ -21,19 +19,13 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      const result = await api.login(username, password, challengeQuestion ? nickname : undefined);
+      const result = await api.login(username, password);
       if (result.ok) {
         router.replace("/");
         return;
       }
       if (result.blocked) {
         setBlocked(true);
-        setChallengeQuestion(null);
-        return;
-      }
-      if (result.challenge) {
-        setChallengeQuestion(result.question ?? "What's Sarmad's nickname?");
-        setError(null);
         return;
       }
       setError(result.error ?? "Login failed");
@@ -122,23 +114,6 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
-
-            {challengeQuestion && (
-              <div className="mb-5">
-                <label htmlFor="nickname" className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-status-warning">
-                  {challengeQuestion}
-                </label>
-                <input
-                  id="nickname"
-                  name="nickname"
-                  autoComplete="off"
-                  className="w-full rounded-md border border-status-warning/40 bg-bg-raised px-3 py-2.5 text-sm text-white outline-none transition focus:border-status-warning focus:ring-1 focus:ring-status-warning"
-                  value={nickname}
-                  onChange={(e) => setNickname(e.target.value)}
-                  autoFocus
-                />
-              </div>
-            )}
 
             {error && (
               <p role="alert" className="mb-4 rounded-md border border-status-critical/30 bg-status-critical/[0.08] px-3 py-2 text-sm text-status-critical">
